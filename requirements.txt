@@ -1,0 +1,7 @@
+Flask==3.0.3
+Flask-Cors==5.0.0
+Flask-SocketIO==5.3.7
+tensorflow==2.0.0
+transformers
+openai
+torch

@@ -1,6 +1,7 @@
 from flask import Flask
 import logging
 import os
+import re
 
 import flask
 from flask import request
@@ -9,10 +10,16 @@ from flask_cors import CORS, cross_origin
 
 from flask_socketio import SocketIO, emit, join_room
 
-from goha.ai_engine import generate_response, generate_image
+# from goha.ai_engine import generate_response, generate_image
 # Use a pipeline as a high-level helper
 from transformers import pipeline
+from openai import OpenAI
+from config import config
 
+
+# client = OpenAI()
+key = config.read_config()
+client = OpenAI(api_key=key["API_KEY"])
 pipe = pipeline("translation", model="facebook/nllb-200-distilled-600M")
 
 app = Flask(__name__)
@@ -71,9 +78,86 @@ def logga(info):
     app.logger.setLevel(gunicorn_logger.level)
     app.logger.critical(info)
 
+def translate_lang(string, src_lang):
 
-if __name__ == "__main__":
-    # pip install pyopenssl
-    # app.run(host="0.0.0.0", port=5004, debug=True, threaded=True)
-    socketio.run(app, host="0.0.0.0", port=5004, debug=True,
-                 allow_unsafe_werkzeug=True)  # threaded=True, allow_unsafe_werkzeug=True
+    response = pipe(string, src_lang=src_lang, tgt_lang="eng_Latn")
+    
+    return response
+
+
+
+
+def generate_response(msg_received):
+    try:
+        string = msg_received["message"]
+        src_lang = msg_received["source_lang"]
+        tgt_lang = msg_received["target_lang"]
+    except KeyError as k:
+        return {"Message": "A key for generating text is missing", "Error": str(k), "statusCode": 401}
+    
+    translated_text = translate_lang(string, src_lang, tgt_lang)
+    print(translated_text)
+
+    try:
+        completion = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant."},
+                {
+                    "role": "user",
+                    "content": translated_text[0]['translation_text']
+                }
+            ]
+        )
+        response = completion.choices[0].message
+        response = response.content
+        # print(completion.choices[0].message)
+        # print(type(completion.choices[0].message))
+        return {
+            "message": "Response success",
+            "data": response,
+            "statusCode": 200
+        }
+
+    except Exception as e:
+        return {
+            "message": "Error generating text",
+            "error": str(e),
+            "statusCode": 500
+        }
+    
+def generate_image(msg_received):
+    try:
+        string = msg_received["message"]
+        src_lang = msg_received["source_lang"]
+        tgt_lang = msg_received["target_lang"]
+    except KeyError as k:
+        return {"Message": "A key for generating image is missing", "Error": str(k), "statusCode": 401}
+
+    translated_text = translate_lang(string, src_lang, tgt_lang)
+
+    try:
+        response = client.images.generate(
+            prompt="A cute baby sea otter",
+            n=2,
+            size="1024x1024"
+        )
+
+        return {
+            "message": "Response success",
+            "data": response.data[0].url,
+            "statusCode": 200
+        }
+    except Exception as e:
+        return {
+            "message": "Error generating text",
+            "error": str(e),
+            "statusCode": 500
+        }
+
+
+# if __name__ == "__main__":
+#     # pip install pyopenssl
+#     # app.run(host="0.0.0.0", port=5004, debug=True, threaded=True)
+#     socketio.run(app, host="0.0.0.0", port=5004, debug=True,
+#                  allow_unsafe_werkzeug=True)  # threaded=True, allow_unsafe_werkzeug=True

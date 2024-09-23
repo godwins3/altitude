@@ -2,7 +2,7 @@ from configparser import ConfigParser
 import os
 
 
-def read_config(filename=os.path.dirname(os.path.abspath(__file__)) + '/mongo_config.ini', section='mongo'):
+def read_config(filename=os.path.dirname(os.path.abspath(__file__)) + '/config.ini', section='mongo'):
     """ Read database configuration file and return a dictionary object
     :param filename: name of the configuration file
     :param section: section of database configuration
